@@ -151,7 +151,8 @@ pipeline {
 				'''
 			}
 		}
-
+	}
+	
     post {
         always {
             echo "🧾 Pipeline completed."
