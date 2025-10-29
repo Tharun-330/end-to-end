@@ -4,7 +4,7 @@ pipeline {
     environment {
         APP_NAME = "my-app"
         IMAGE_TAG = "v${BUILD_NUMBER}"
-        DOCKER_IMAGE = "tharunkumar/${APP_NAME}:${IMAGE_TAG}"
+        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
         PYTHON = "/usr/bin/python3"
 	AWS_REGION = "ap-south-1"                  // ✅ change as needed
         ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
