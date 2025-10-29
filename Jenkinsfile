@@ -148,8 +148,8 @@ pipeline {
 					kubectl apply -n dev -f k8s/dev/service.yaml
 
 					#force rollout to ensure update
-					kubectl rollout restart deployment/my-app -n dev
-					kubectl rollout status deployment/my-app -n dev
+					kubectl rollout restart deployment/myapp -n dev
+					kubectl rollout status deployment/myapp -n dev
 					
 
 					echo "✅ Deployment completed successfully to dev !"
