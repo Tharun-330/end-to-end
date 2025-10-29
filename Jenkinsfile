@@ -110,30 +110,6 @@ pipeline {
             }
         }
 
-        stage('Login to AWS ECR') {
-            steps {
-                echo "🔐 Authenticating to AWS ECR..."
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    sh '''
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        echo "✅ Successfully logged in to ECR!"
-                    '''
-                }
-            }
-        }
-
-        stage('Push Docker Image to AWS ECR') {
-            steps {
-                echo "☁️ Pushing image to AWS ECR..."
-                sh '''
-                    set -e
-                    docker push ${DOCKER_IMAGE}
-                    echo "✅ Image pushed successfully: ${DOCKER_IMAGE}"
-                '''
-            }
-        }
-
         stage('Create ECR Pull Secret in Minikube') {
             steps {
                 echo "🔑 Creating ECR pull secret in Minikube..."
@@ -178,3 +154,18 @@ pipeline {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
