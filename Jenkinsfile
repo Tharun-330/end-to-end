@@ -4,38 +4,28 @@ pipeline {
     environment {
         APP_NAME = "my-app"
         IMAGE_TAG = "v${BUILD_NUMBER}"
+        AWS_REGION = "ap-south-1"
+        ACCOUNT_ID = "132514887880"
+        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
         PYTHON = "/usr/bin/python3"
-	AWS_REGION = "ap-south-1"                  // ✅ change as needed
-        ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
-        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo "Checking out source code..."
                 checkout scm
             }
         }
 
         stage('Setup Python Environment') {
             steps {
-                echo "Setting up Python virtual environment..."
                 sh '''
                     set -e
-                    if ! command -v python3 >/dev/null 2>&1; then
-                        echo "Installing Python3..."
-                        sudo apt-get update -y
-                        sudo apt-get install -y python3 python3-pip python3-venv
-                    fi
-
-                    # Clean and recreate venv
                     rm -rf venv
                     ${PYTHON} -m venv venv
                     . venv/bin/activate
-
                     pip install --upgrade pip
                     pip install -r app/requirements.txt
                 '''
@@ -44,17 +34,13 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                echo "Running unit tests..."
                 sh '''
-                    set -e
                     . venv/bin/activate
-                    chmod +x venv/bin/pytest  # ✅ Fix: ensure pytest is executable
                     pytest app/tests/ -v --junitxml=results.xml
                 '''
             }
             post {
                 always {
-                    echo "Archiving test results..."
                     junit allowEmptyResults: true, testResults: 'results.xml'
                 }
             }
@@ -62,84 +48,116 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image..."
                 sh '''
-					set -e
                     docker build -t ${DOCKER_IMAGE} .
-                    echo "✅ Docker image built successfully!"
-
-                    echo "📦 Image details:"
-                    docker images ${ECR_REPO} --format "Repository: {{.Repository}} | Tag: {{.Tag}} | Size: {{.Size}}"
-                '''
-            }
-        }
-		
-        stage('Scan Docker Image (Trivy)') {
-            steps {
-                echo "🔍 Scanning Docker image with Trivy..."
-                sh '''
-                    set -e
-                    trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
+                    docker images ${DOCKER_IMAGE} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
                 '''
             }
         }
 
-        stage('Login to AWS ECR') {
+        stage('Trivy Scan') {
             steps {
-                echo "🔑 Logging in to AWS ECR..."
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
+                sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}"
+            }
+        }
+
+        stage('Push to AWS ECR') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     sh '''
-                        set -e
-                        echo "Authenticating to AWS ECR..."
                         aws ecr get-login-password --region ${AWS_REGION} | \
                         docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        echo "✅ Successfully logged in to ECR!"
+                        docker push ${DOCKER_IMAGE}
                     '''
                 }
             }
         }
 
-        stage('Push Docker Image to AWS ECR') {
+        stage('Deploy to DEV') {
             steps {
-                echo "☁️ Pushing image to AWS ECR..."
+                echo "🚀 Deploying to DEV..."
                 sh '''
-                    set -e
-                    docker push ${DOCKER_IMAGE}
-                    echo "✅ Image pushed successfully: ${DOCKER_IMAGE}"
+                    kubectl delete secret ecr-secret -n dev --ignore-not-found
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    kubectl create secret docker-registry ecr-secret \
+                      --docker-server=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+                      --docker-username=AWS \
+                      --docker-password-stdin \
+                      --namespace=dev
+
+                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/dev/deployment.yaml
+                    kubectl apply -f k8s/dev/ -n dev
+                    kubectl rollout status deployment/${APP_NAME} -n dev --timeout=60s
                 '''
             }
         }
 
-        stage('Deploy to Minikube') {
+        stage('Approve for QA') {
             steps {
-                echo "🚀 Deploying to Minikube..."
+                input message: "✅ DEV Deployment successful. Approve to deploy to QA?"
+            }
+        }
+
+        stage('Deploy to QA') {
+            steps {
+                echo "🚀 Deploying to QA..."
                 sh '''
-                    set -e
-                    kubectl config use-context minikube
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    kubectl create secret docker-registry ecr-secret \
+                      --docker-server=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+                      --docker-username=AWS \
+                      --docker-password-stdin \
+                      --namespace=qa
 
-                    echo "Updating Helm chart image to ${DOCKER_IMAGE} ..."
-                    helm upgrade --install ${APP_NAME} helm/myapp \
-                        --set image.repository=${ECR_REPO} \
-                        --set image.tag=${IMAGE_TAG} \
-                        -f helm/myapp/values-dev.yaml \
-                        --namespace dev --create-namespace
+                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/qa/deployment.yaml
+                    kubectl apply -f k8s/qa/ -n qa
+                    kubectl rollout status deployment/${APP_NAME} -n qa --timeout=60s
+                '''
+            }
+        }
 
-                    echo "✅ Deployment triggered successfully!"
-                    kubectl get pods -n dev
+        stage('Approve for UAT') {
+            steps {
+                input message: "✅ QA passed. Approve to deploy to UAT?"
+            }
+        }
+
+        stage('Deploy to UAT') {
+            steps {
+                echo "🚀 Deploying to UAT..."
+                sh '''
+                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/uat/deployment.yaml
+                    kubectl apply -f k8s/uat/ -n uat
+                    kubectl rollout status deployment/${APP_NAME} -n uat --timeout=60s
+                '''
+            }
+        }
+
+        stage('Approve for PROD') {
+            steps {
+                input message: "✅ UAT approved. Deploy to PROD?"
+            }
+        }
+
+        stage('Deploy to PROD') {
+            steps {
+                echo "🚀 Deploying to PROD..."
+                sh '''
+                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/prod/deployment.yaml
+                    kubectl apply -f k8s/prod/ -n prod
+                    kubectl rollout status deployment/${APP_NAME} -n prod --timeout=120s
                 '''
             }
         }
     }
 
     post {
-        always {
-            echo "🏁 Pipeline completed."
+        success {
+            echo "🎉 All environments deployed successfully!"
         }
         failure {
-            echo "❌ Pipeline failed! Check the logs above."
-        }
-        success {
-            echo "✅ Pipeline executed successfully! Image: ${DOCKER_IMAGE}"
+            echo "❌ Pipeline failed — check logs."
         }
     }
 }
+
