@@ -1,0 +1,36 @@
+name: CI-CD Multi-Env Promotion (helper)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment to deploy (dev, qa, prod)"
+        required: true
+        default: "dev"
+
+env:
+  ECR_REPOSITORY: myapp-repo
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10
+      - name: Run tests
+        run: pytest app/tests/
+      - name: Build Docker image (local)
+        run: |
+          docker build -t myapp:latest .
+      - name: Upload artifact (image tag)
+        run: echo "local" > image-tag.txt
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag
+          path: image-tag.txt
