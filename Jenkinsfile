@@ -9,7 +9,6 @@ pipeline {
 	AWS_REGION = "ap-south-1"                  // ✅ change as needed
         ACCOUNT_ID = "123456789012"                // ✅ your AWS Account ID
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
-        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
