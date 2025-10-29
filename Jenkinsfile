@@ -1,99 +1,111 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'TARGET_ENV', defaultValue: '', description: 'Environment to deploy (dev, qa, prod)')
+    environment {
+        APP_NAME = "my-app"
+        IMAGE_TAG = "v${BUILD_NUMBER}"
+        DOCKER_IMAGE = "tharunkumar/${APP_NAME}:${IMAGE_TAG}"
+        PYTHON = "/usr/bin/python3"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
+                echo "Checking out source code..."
                 checkout scm
             }
         }
 
         stage('Setup Python Environment') {
             steps {
+                echo "Setting up Python virtual environment..."
                 sh '''
-                set -e
-                python3 -m venv venv
-                . venv/bin/activate
-                pip install --upgrade pip
-                pip install -r app/requirements.txt
-                pip install pytest
+                    set -e
+                    if ! command -v python3 >/dev/null 2>&1; then
+                        echo "Installing Python3..."
+                        sudo apt-get update -y
+                        sudo apt-get install -y python3 python3-pip python3-venv
+                    fi
+
+                    # Clean and recreate venv
+                    rm -rf venv
+                    ${PYTHON} -m venv venv
+                    . venv/bin/activate
+
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
                 '''
             }
         }
 
-        stage('Run Unit Tests') {
+        stage('Run Tests') {
             steps {
+                echo "Running unit tests..."
                 sh '''
-                set -e
-                . venv/bin/activate
-                pytest app/tests/ -v --junitxml=results.xml
+                    set -e
+                    . venv/bin/activate
+                    chmod +x venv/bin/pytest  # ✅ Fix: ensure pytest is executable
+                    pytest app/tests/ -v --junitxml=results.xml
                 '''
             }
             post {
                 always {
-                    junit 'results.xml'
+                    echo "Archiving test results..."
+                    junit allowEmptyResults: true, testResults: 'results.xml'
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
+                echo "Building Docker image..."
                 sh '''
-                set -e
-                docker build -t myapp:latest .
+                    set -e
+                    docker build -t ${DOCKER_IMAGE} .
                 '''
             }
         }
 
-        stage('Image Scan') {
+        stage('Push Docker Image') {
             when {
-                expression { fileExists('scripts/image_scan.sh') }
+                expression { return env.DOCKERHUB_CREDENTIALS != null }
             }
             steps {
-                sh '''
-                chmod +x scripts/image_scan.sh
-                ./scripts/image_scan.sh
-                '''
+                echo "Pushing image to DockerHub..."
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}
+                    '''
+                }
             }
         }
 
-        stage('Helm Deploy') {
-            when {
-                expression { params.TARGET_ENV != '' }
-            }
+        stage('Deploy to Minikube') {
             steps {
+                echo "Deploying to local Minikube..."
                 sh '''
-                set -e
-                if ! command -v helm > /dev/null; then
-                    echo "Helm not installed on Jenkins agent. Skipping deployment."
-                    exit 0
-                fi
-
-                VALUES_FILE="helm/myapp/values-${TARGET_ENV}.yaml"
-                if [ ! -f "$VALUES_FILE" ]; then
-                    echo "Values file not found: $VALUES_FILE"
-                    exit 1
-                fi
-
-                helm upgrade --install myapp-${TARGET_ENV} helm/myapp -f $VALUES_FILE
+                    set -e
+                    kubectl config use-context minikube
+                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/deployment.yaml
+                    kubectl apply -f k8s/
+                    kubectl rollout status deployment/${APP_NAME} --timeout=60s
                 '''
             }
         }
     }
 
     post {
-        success {
-            echo '✅ Pipeline completed successfully.'
+        always {
+            echo "Pipeline completed."
         }
         failure {
-            echo '❌ Pipeline failed. Check logs for details.'
+            echo "Pipeline failed! Check the logs above."
         }
-        always {
-            sh 'rm -rf venv || true'
+        success {
+            echo "✅ Pipeline executed successfully!"
         }
     }
 }
+
