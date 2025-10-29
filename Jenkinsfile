@@ -144,10 +144,15 @@ pipeline {
 					sed -i "s|REPLACE_IMAGE|${ECR_REPO}:${IMAGE_TAG}|g" k8s/dev/deployment.yaml
 
 					# Apply manifests
-					kubectl apply -f k8s/dev/deployment.yaml
-					kubectl apply -f k8s/dev/service.yaml
+					kubectl apply -n dev -f k8s/dev/deployment.yaml
+					kubectl apply -n dev -f k8s/dev/service.yaml
 
-					echo "✅ Deployment completed successfully!"
+					#force rollout to ensure update
+					kubectl rollout restart deployment/my-app -n dev
+					kubectl rollout status deployment/my-app -n dev
+					
+
+					echo "✅ Deployment completed successfully to dev !"
 				'''
 			}
 		}
