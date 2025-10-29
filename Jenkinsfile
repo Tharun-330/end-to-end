@@ -7,7 +7,7 @@ pipeline {
         DOCKER_IMAGE = "tharunkumar/${APP_NAME}:${IMAGE_TAG}"
         PYTHON = "/usr/bin/python3"
 	AWS_REGION = "ap-south-1"                  // ✅ change as needed
-        ACCOUNT_ID = "123456789012"                // ✅ your AWS Account ID
+        ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
     }
 
