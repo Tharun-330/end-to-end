@@ -110,23 +110,24 @@ pipeline {
             }
         }
 
-        stage('Create ECR Pull Secret in Minikube') {
-            steps {
-                echo "🔑 Creating ECR pull secret in Minikube..."
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
-                    sh '''
-                        kubectl delete secret ecr-secret -n dev --ignore-not-found
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        kubectl create secret docker-registry ecr-secret \
-                            --docker-server=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com \
-                            --docker-username=AWS \
-                            --docker-password-stdin \
-                            --namespace=dev
-                        echo "✅ ECR secret created successfully in Minikube!"
-                    '''
-                }
-            }
-        }
+		stage('Create ECR Pull Secret in Minikube') {
+		  steps {
+			withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
+			  sh '''
+				echo "🔑 Creating ECR pull secret in Minikube..."
+				kubectl delete secret ecr-secret -n dev --ignore-not-found
+
+				aws ecr get-login-password --region ${AWS_REGION} | kubectl create secret docker-registry ecr-secret \
+				  --docker-server=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+				  --docker-username=AWS \
+				  --docker-password-stdin \
+				  -n dev
+
+				echo "✅ ECR pull secret created successfully!"
+			  '''
+			}
+		  }
+		}
 
         stage('Deploy to Minikube') {
             steps {
@@ -154,18 +155,5 @@ pipeline {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
