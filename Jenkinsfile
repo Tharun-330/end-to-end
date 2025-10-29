@@ -113,7 +113,7 @@ pipeline {
         stage('Create ECR Pull Secret in Minikube') {
             steps {
                 echo "🔑 Creating ECR pull secret in Minikube..."
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
                     sh '''
                         kubectl delete secret ecr-secret -n dev --ignore-not-found
                         aws ecr get-login-password --region ${AWS_REGION} | \
