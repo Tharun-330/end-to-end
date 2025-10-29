@@ -6,6 +6,10 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         DOCKER_IMAGE = "tharunkumar/${APP_NAME}:${IMAGE_TAG}"
         PYTHON = "/usr/bin/python3"
+		AWS_REGION = "ap-south-1"                  // ✅ change as needed
+        ACCOUNT_ID = "123456789012"                // ✅ your AWS Account ID
+        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
@@ -61,36 +65,68 @@ pipeline {
             steps {
                 echo "Building Docker image..."
                 sh '''
-                    set -e
+					set -e
                     docker build -t ${DOCKER_IMAGE} .
+                    echo "✅ Docker image built successfully!"
+
+                    echo "📦 Image details:"
+                    docker images ${ECR_REPO} --format "Repository: {{.Repository}} | Tag: {{.Tag}} | Size: {{.Size}}"
+                '''
+            }
+        }
+		
+        stage('Scan Docker Image (Trivy)') {
+            steps {
+                echo "🔍 Scanning Docker image with Trivy..."
+                sh '''
+                    set -e
+                    trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
                 '''
             }
         }
 
-        stage('Push Docker Image') {
-            when {
-                expression { return env.DOCKERHUB_CREDENTIALS != null }
-            }
+        stage('Login to AWS ECR') {
             steps {
-                echo "Pushing image to DockerHub..."
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                echo "🔑 Logging in to AWS ECR..."
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push ${DOCKER_IMAGE}
+                        set -e
+                        echo "Authenticating to AWS ECR..."
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        echo "✅ Successfully logged in to ECR!"
                     '''
                 }
             }
         }
 
+        stage('Push Docker Image to AWS ECR') {
+            steps {
+                echo "☁️ Pushing image to AWS ECR..."
+                sh '''
+                    set -e
+                    docker push ${DOCKER_IMAGE}
+                    echo "✅ Image pushed successfully: ${DOCKER_IMAGE}"
+                '''
+            }
+        }
+
         stage('Deploy to Minikube') {
             steps {
-                echo "Deploying to local Minikube..."
+                echo "🚀 Deploying to Minikube..."
                 sh '''
                     set -e
                     kubectl config use-context minikube
-                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/deployment.yaml
-                    kubectl apply -f k8s/
-                    kubectl rollout status deployment/${APP_NAME} --timeout=60s
+
+                    echo "Updating Helm chart image to ${DOCKER_IMAGE} ..."
+                    helm upgrade --install ${APP_NAME} helm/myapp \
+                        --set image.repository=${ECR_REPO} \
+                        --set image.tag=${IMAGE_TAG} \
+                        -f helm/myapp/values-dev.yaml \
+                        --namespace dev --create-namespace
+
+                    echo "✅ Deployment triggered successfully!"
+                    kubectl get pods -n dev
                 '''
             }
         }
@@ -98,14 +134,13 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline completed."
+            echo "🏁 Pipeline completed."
         }
         failure {
-            echo "Pipeline failed! Check the logs above."
+            echo "❌ Pipeline failed! Check the logs above."
         }
         success {
-            echo "✅ Pipeline executed successfully!"
+            echo "✅ Pipeline executed successfully! Image: ${DOCKER_IMAGE}"
         }
     }
 }
-
