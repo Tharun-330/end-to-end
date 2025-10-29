@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      imagePullSecrets:
+        - name: ecr-secret
+      containers:
+        - name: my-app
+          image: REPLACE_WITH_IMAGE
+          ports:
+            - containerPort: 5000
+

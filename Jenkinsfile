@@ -128,20 +128,29 @@ pipeline {
 			}
 		}
 
+		stage('Deploy to Minikube Dev') {
+			steps {
+				echo "🚀 Deploying to DEV environment..."
 
-        stage('Deploy to Minikube') {
-            steps {
-                echo "🚀 Deploying to Minikube..."
-                sh '''
-                    set -e
-                    kubectl config use-context minikube
-                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}|g" k8s/deployment.yaml
-                    kubectl apply -f k8s/ -n dev
-                    kubectl rollout status deployment/${APP_NAME} -n dev --timeout=60s
-                '''
-            }
-        }
-    }
+				sh '''
+					set -e
+
+					kubectl config use-context minikube
+
+					# Ensure namespace exists
+					kubectl get ns dev >/dev/null 2>&1 || kubectl create ns dev
+
+					# Replace image dynamically in manifest
+					sed -i "s|REPLACE_IMAGE|${ECR_REPO}:${IMAGE_TAG}|g" k8s/dev/deployment.yaml
+
+					# Apply manifests
+					kubectl apply -f k8s/dev/deployment.yaml
+					kubectl apply -f k8s/dev/service.yaml
+
+					echo "✅ Deployment completed successfully!"
+				'''
+			}
+		}
 
     post {
         always {
