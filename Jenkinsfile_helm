@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        APP_NAME = "my-app"
+        APP_NAME = "myapp"
         IMAGE_TAG = "v${BUILD_NUMBER}"
         PYTHON = "/usr/bin/python3"
         AWS_REGION = "ap-south-1"                  // ✅ change as needed
@@ -69,7 +69,6 @@ pipeline {
                     set -e
                     docker build -t ${DOCKER_IMAGE} .
                     echo "✅ Docker image built successfully!"
-                    docker images ${ECR_REPO} --format "Repository: {{.Repository}} | Tag: {{.Tag}} | Size: {{.Size}}"
                 '''
             }
         }
@@ -127,24 +126,21 @@ pipeline {
             }
         }
 
-
-        stage('Deploy via Helm') {
+        stage('Deploy to Minikube using Helm') {
             steps {
-                script {
-                    def envName = "${params.ENVIRONMENT ?: 'qa'}"
-                    echo "🚀 Deploying to ${envName} environment using Helm..."
-
-                    sh """
-                      helm upgrade --install myapp ./helm/myapp \
-                        --namespace ${envName} \
-                        --create-namespace \
-                        -f ./helm/myapp/values-${envName}.yaml \
-                        --set image.repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO} \
-                        --set image.tag=${BUILD_NUMBER}
-                    """
-                }
+                echo "🚀 Deploying ${APP_NAME} using Helm..."
+                sh '''
+                    set -e
+                    helm upgrade --install ${APP_NAME}-${params.ENVIRONMENT} ${HELM_CHART} \
+                        -f ${HELM_CHART}/values-qa.yaml \
+                        --set image.repository=${ECR_REPO} \
+                        --set image.tag=${IMAGE_TAG} \
+                        --namespace dev --create-namespace
+                    echo "✅ Helm deployment successful!"
+                '''
             }
         }
+    }
 
         stage('Verify Deployment') {
             steps {
