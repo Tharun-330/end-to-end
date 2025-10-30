@@ -128,21 +128,10 @@ pipeline {
         }
 
 
-        stage('Tag & Push Image to ECR') {
-            steps {
-                echo "📤 Tagging and pushing image to ECR..."
-                sh """
-                  docker tag ${IMAGE_TAG}:${BUILD_NUMBER} ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
-                  docker push ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
-                """
-            }
-        }
-
-
         stage('Deploy via Helm') {
             steps {
                 script {
-                    def envName = "${params.ENVIRONMENT ?: 'dev'}"
+                    def envName = "${params.ENVIRONMENT ?: 'qa'}"
                     echo "🚀 Deploying to ${envName} environment using Helm..."
 
                     sh """
