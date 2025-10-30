@@ -13,6 +13,7 @@ pipeline {
         ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
+	HELM_CHART = "./helm/myapp"  
     }
 
     stages {
