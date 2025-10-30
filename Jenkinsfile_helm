@@ -121,7 +121,7 @@ pipeline {
                             --docker-server=132514887880.dkr.ecr.ap-south-1.amazonaws.com \
                             --docker-username=AWS \
                             --docker-password="$ECR_PASSWORD" \
-                            -n dev
+                            -n ${params.ENVIRONMENT} 
                     '''
                 }
             }
