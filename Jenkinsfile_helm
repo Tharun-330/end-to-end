@@ -132,7 +132,7 @@ pipeline {
             steps {
                 echo "📤 Tagging and pushing image to ECR..."
                 sh """
-                  docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
+                  docker tag ${IMAGE_TAG}:${BUILD_NUMBER} ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
                   docker push ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
                 """
             }
