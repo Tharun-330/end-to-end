@@ -146,6 +146,7 @@ pipeline {
 					# Apply manifests
 					kubectl apply -n dev -f k8s/dev/deployment.yaml
 					kubectl apply -n dev -f k8s/dev/service.yaml
+					kubectl apply -n dev -f k8s/dev/ingress.yaml
 
 					#force rollout to ensure update
 					kubectl rollout restart deployment/myapp -n dev
