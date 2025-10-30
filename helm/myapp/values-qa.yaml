@@ -1,4 +1,20 @@
+# values-qa.yaml
+namespace: qa
 replicaCount: 2
+
 image:
-  repository: myapp
+  repository: 132514887880.dkr.ecr.ap-south-1.amazonaws.com/myapp
   tag: latest
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 400m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
