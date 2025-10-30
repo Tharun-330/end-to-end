@@ -13,7 +13,7 @@ pipeline {
         ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
-	HELM_CHART = "./helm/myapp"  
+		HELM_CHART = "./helm/myapp"  
     }
 
     stages {
@@ -109,24 +109,29 @@ pipeline {
             }
         }
 
-        stage('Create ECR Pull Secret in Minikube') {
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
-                    sh '''
-                        echo "🔑 Creating ECR pull secret in Minikube..."
-                        kubectl delete secret ecr-secret -n ${params.ENVIRONMENT} --ignore-not-found
+		stage('Create ECR Pull Secret in Minikube') {
+			steps {
+				withCredentials([[
+					$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
+					sh '''#!/bin/bash
+					set -e
+					echo "🔑 Creating ECR pull secret in Minikube for namespace: ${ENVIRONMENT}"
 
-                        ECR_PASSWORD=$(aws ecr get-login-password --region ap-south-1)
-                        kubectl create secret docker-registry ecr-secret \
-                            --docker-server=132514887880.dkr.ecr.ap-south-1.amazonaws.com \
-                            --docker-username=AWS \
-                            --docker-password="$ECR_PASSWORD" \
-                            -n ${params.ENVIRONMENT} 
-                    '''
-                }
-            }
-        }
+					# Delete existing secret if any
+					kubectl delete secret ecr-secret -n ${ENVIRONMENT} --ignore-not-found
 
+					# Get ECR password and create the secret
+					ECR_PASSWORD=$(aws ecr get-login-password --region ${AWS_REGION})
+					kubectl create secret docker-registry ecr-secret \
+						--docker-server=132514887880.dkr.ecr.ap-south-1.amazonaws.com \
+						--docker-username=AWS \
+						--docker-password="${ECR_PASSWORD}" \
+						-n ${ENVIRONMENT}
+					'''
+				}
+			}
+		}
+		
 		stage('Deploy to Minikube using Helm') {
 			steps {
 				script {
