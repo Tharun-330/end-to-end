@@ -1,0 +1,180 @@
+pipeline {
+    agent any
+	
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'qa', 'prod'], description: 'Select environment to deploy')
+    }
+
+    environment {
+        APP_NAME = "my-app"
+        IMAGE_TAG = "v${BUILD_NUMBER}"
+        PYTHON = "/usr/bin/python3"
+        AWS_REGION = "ap-south-1"                  // ✅ change as needed
+        ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
+        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Checking out source code..."
+                checkout scm
+            }
+        }
+
+        stage('Setup Python Environment') {
+            steps {
+                echo "Setting up Python virtual environment..."
+                sh '''
+                    set -e
+                    if ! command -v python3 >/dev/null 2>&1; then
+                        echo "Installing Python3..."
+                        sudo apt-get update -y
+                        sudo apt-get install -y python3 python3-pip python3-venv
+                    fi
+
+                    rm -rf venv
+                    ${PYTHON} -m venv venv
+                    . venv/bin/activate
+
+                    pip install --upgrade pip
+                    pip install -r app/requirements.txt
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                echo "Running unit tests..."
+                sh '''
+                    set -e
+                    . venv/bin/activate
+                    pytest app/tests/ -v --junitxml=results.xml
+                '''
+            }
+            post {
+                always {
+                    echo "Archiving test results..."
+                    junit allowEmptyResults: true, testResults: 'results.xml'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "Building Docker image..."
+                sh '''
+                    set -e
+                    docker build -t ${DOCKER_IMAGE} .
+                    echo "✅ Docker image built successfully!"
+                    docker images ${ECR_REPO} --format "Repository: {{.Repository}} | Tag: {{.Tag}} | Size: {{.Size}}"
+                '''
+            }
+        }
+
+        stage('Scan Docker Image (Trivy)') {
+            steps {
+                echo "🔍 Scanning Docker image with Trivy..."
+                sh '''
+                    set -e
+                    trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
+                '''
+            }
+        }
+
+        stage('Login to AWS ECR') {
+            steps {
+                echo "🔑 Logging in to AWS ECR..."
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
+                    sh '''
+                        set -e
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        echo "✅ Successfully logged in to ECR!"
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image to AWS ECR') {
+            steps {
+                echo "☁️ Pushing image to AWS ECR..."
+                sh '''
+                    set -e
+                    docker push ${DOCKER_IMAGE}
+                    echo "✅ Image pushed successfully: ${DOCKER_IMAGE}"
+                '''
+            }
+        }
+
+        stage('Create ECR Pull Secret in Minikube') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
+                    sh '''
+                        echo "🔑 Creating ECR pull secret in Minikube..."
+                        kubectl delete secret ecr-secret -n dev --ignore-not-found
+
+                        ECR_PASSWORD=$(aws ecr get-login-password --region ap-south-1)
+                        kubectl create secret docker-registry ecr-secret \
+                            --docker-server=132514887880.dkr.ecr.ap-south-1.amazonaws.com \
+                            --docker-username=AWS \
+                            --docker-password="$ECR_PASSWORD" \
+                            -n dev
+                    '''
+                }
+            }
+        }
+
+
+        stage('Tag & Push Image to ECR') {
+            steps {
+                echo "📤 Tagging and pushing image to ECR..."
+                sh """
+                  docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
+                  docker push ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${BUILD_NUMBER}
+                """
+            }
+        }
+
+
+        stage('Deploy via Helm') {
+            steps {
+                script {
+                    def envName = "${params.ENVIRONMENT ?: 'dev'}"
+                    echo "🚀 Deploying to ${envName} environment using Helm..."
+
+                    sh """
+                      helm upgrade --install myapp ./helm/myapp \
+                        --namespace ${envName} \
+                        --create-namespace \
+                        -f ./helm/myapp/values-${envName}.yaml \
+                        --set image.repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO} \
+                        --set image.tag=${BUILD_NUMBER}
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                echo "🔍 Verifying deployment status..."
+                sh """
+                  kubectl get pods -n ${params.ENVIRONMENT}
+                  kubectl get svc -n ${params.ENVIRONMENT}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Helm deployment to ${params.ENVIRONMENT} successful!"
+        }
+        failure {
+            echo "❌ Deployment failed. Check Helm and ECR logs."
+        }
+    }
+}
+
