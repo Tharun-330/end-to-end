@@ -1,36 +1,92 @@
 name: CI-CD Multi-Env Promotion (helper)
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       environment:
-        description: "Target environment to deploy (dev, qa, prod)"
+        description: "Target environment to deploy"
         required: true
-        default: "dev"
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+  push:
+    branches: [ "main" ]
 
 env:
+  AWS_REGION: ap-south-1           # 🔹 Update to your region
   ECR_REPOSITORY: myapp-repo
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.image_tag.outputs.tag }}
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.10
+
       - name: Run tests
         run: pytest app/tests/
-      - name: Build Docker image (local)
+
+      - name: Build Docker image
+        id: image_tag
         run: |
-          docker build -t myapp:latest .
+          IMAGE_TAG=${{ github.run_number }}-${{ github.event.inputs.environment || 'dev' }}
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "$IMAGE_TAG" > image-tag.txt
+
       - name: Upload artifact (image tag)
-        run: echo "local" > image-tag.txt
-      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: image-tag
           path: image-tag.txt
+
+  push-to-ecr:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download image tag artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
+          path: .
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<GITHUB_OIDC_ROLE>  # 🔹 Replace
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag & Push image to ECR
+        run: |
+          ECR_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          docker tag $ECR_REPOSITORY:${{ env.IMAGE_TAG }} $ECR_URI:${{ env.IMAGE_TAG }}
+          docker push $ECR_URI:${{ env.IMAGE_TAG }}
+          echo "ECR_IMAGE_URI=$ECR_URI:${{ env.IMAGE_TAG }}" >> $GITHUB_ENV
+          echo "ECR_IMAGE_URI=$ECR_URI:${{ env.IMAGE_TAG }}" > ecr_image_uri.txt
+
+      - name: Upload pushed image metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecr-image
+          path: ecr_image_uri.txt
