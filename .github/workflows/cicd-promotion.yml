@@ -1,4 +1,4 @@
-name: CI-CD Pipeline
+name: CI-CD Pipeline (ECR + ECS Deploy)
 
 on:
   push:
@@ -8,17 +8,22 @@ on:
       - master
 
 permissions:
-  id-token: write        # Required for OIDC to assume AWS role
-  contents: read         # Needed for checkout and artifact access
-      
+  id-token: write
+  contents: read
+
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: myapp-repo
+  ECS_CLUSTER: myapp-cluster
+  ECS_SERVICE_DEV: myapp-dev-service
+  ECS_SERVICE_QA: myapp-qa-service
+  ECS_SERVICE_PROD: myapp-prod-service
+  ECS_TASK_DEFINITION: ecs-task-def.json
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image to ECR
+  build-push-deploy:
     runs-on: ubuntu-latest
+    name: Build, Push to ECR, and Deploy to ECS
 
     steps:
       - name: Checkout code
@@ -27,41 +32,82 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'   # supported version
+          python-version: '3.12'
 
-      - name: Determine Environment
+      # Detect which environment (dev / qa / prod) from branch
+      - name: Detect Environment
         id: env_detect
         run: |
           BRANCH_NAME=${GITHUB_REF_NAME}
-          if [[ "$BRANCH_NAME" == "dev" || "$BRANCH_NAME" == "qa" || "$BRANCH_NAME" == "master" ]]; then
-            echo "env=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "Unknown branch, defaulting to dev"
-            echo "env=dev" >> $GITHUB_OUTPUT
-          fi
-          echo "🧩 Environment set to: $BRANCH_NAME"
+          case "$BRANCH_NAME" in
+            dev) SERVICE=${{ env.ECS_SERVICE_DEV }} ;;
+            qa) SERVICE=${{ env.ECS_SERVICE_QA }} ;;
+            master) SERVICE=${{ env.ECS_SERVICE_PROD }} ;;
+            *) SERVICE=${{ env.ECS_SERVICE_DEV }} ;;
+          esac
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+          echo "env=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "🌍 Environment detected: $BRANCH_NAME -> $SERVICE"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::132514887880:role/github-oidc-role
           aws-region: ${{ env.AWS_REGION }}
-        
+
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, Tag, and Push Docker Image
+      - name: Build and Push Docker Image
+        id: build-push
         run: |
           IMAGE_TAG=${{ github.run_number }}-${{ steps.env_detect.outputs.env }}
-          echo "🚀 Building Docker image: $IMAGE_TAG"
-          
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG \
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-          
-          echo "📦 Pushing image to ECR..."
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-          
-          echo "✅ Successfully pushed image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          ECR_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+
+          echo "🚀 Building image: $ECR_URI:$IMAGE_TAG"
+          docker build -t $ECR_URI:$IMAGE_TAG .
+          docker push $ECR_URI:$IMAGE_TAG
+
+          echo "ECR_IMAGE_URI=$ECR_URI:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "✅ Image pushed successfully: $ECR_URI:$IMAGE_TAG"
+
+      # Replace image URI dynamically into taskdef JSON template
+      - name: Render ECS Task Definition
+        id: render-taskdef
+        run: |
+          echo "📝 Rendering ECS task definition with new image..."
+          envsubst < ${{ env.ECS_TASK_DEFINITION }} > taskdef-rendered.json
+          cat taskdef-rendered.json
+
+      - name: Deploy to Amazon ECS
+        id: ecs-deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: taskdef-rendered.json
+          service: ${{ steps.env_detect.outputs.service }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # Optional: Cleanup old ECS task revisions
+      - name: Cleanup old ECS Task Definitions
+        if: success()
+        run: |
+          FAMILY=$(jq -r '.family' taskdef-rendered.json)
+          echo "🧹 Cleaning up old task definitions for family: $FAMILY"
+
+          # Get all task definitions sorted (oldest first)
+          TASKS=$(aws ecs list-task-definitions --family-prefix $FAMILY --region ${{ env.AWS_REGION }} --query "taskDefinitionArns" --output text | tr '\t' '\n')
+
+          # Keep latest 3
+          COUNT=$(echo "$TASKS" | wc -l)
+          if [ "$COUNT" -gt 3 ]; then
+            echo "$TASKS" | head -n -3 | while read arn; do
+              echo "Deregistering $arn ..."
+              aws ecs deregister-task-definition --task-definition $arn --region ${{ env.AWS_REGION }}
+            done
+          else
+            echo "No old task definitions to clean up."
+          fi
+
+          echo "✅ Cleanup completed successfully."

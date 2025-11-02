@@ -1,0 +1,30 @@
+{
+    "family": "myapp-task",
+    "networkMode": "awsvpc",
+    "executionRoleArn": "arn:aws:iam::132514887880:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+      {
+        "name": "myapp-container",
+        "image": "${ECR_IMAGE_URI}",
+        "essential": true,
+        "portMappings": [
+          {
+            "containerPort": 5000,
+            "protocol": "tcp"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/myapp",
+            "awslogs-region": "ap-south-1",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      }
+    ],
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "0.25",
+    "memory": "0.5"
+  }
+  
