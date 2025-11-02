@@ -8,16 +8,16 @@ on:
       - master
 
 permissions:
-  id-token: write        # 🔹 Required for OIDC to assume AWS role
-  contents: read         # 🔹 Needed for checkout and artifacts
+  id-token: write        # Required for OIDC to assume AWS role
+  contents: read         # Needed for checkout and artifact access
       
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: myapp-repo
 
 jobs:
-  build:
-    name: Build Docker Image
+  build-and-push:
+    name: Build and Push Docker Image to ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'   # fixed supported version
+          python-version: '3.12'   # supported version
 
       - name: Determine Environment
         id: env_detect
@@ -39,7 +39,8 @@ jobs:
             echo "Unknown branch, defaulting to dev"
             echo "env=dev" >> $GITHUB_OUTPUT
           fi
-      
+          echo "🧩 Environment set to: $BRANCH_NAME"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -50,56 +51,17 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
-        id: build-image
+      - name: Build, Tag, and Push Docker Image
         run: |
           IMAGE_TAG=${{ github.run_number }}-${{ steps.env_detect.outputs.env }}
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "🚀 Building Docker image: $IMAGE_TAG"
+          
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REPOSITORY:$IMAGE_TAG \
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-
-      - name: Upload image tag artifact
-        run: echo $IMAGE_TAG > image-tag.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: image-tag
-          path: image-tag.txt
-  
-  push-to-ecr:
-    name: Push Image to ECR
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-        id-token: write      # Required for OIDC
-        contents: read
-        
-    steps:
-        - name: Download image tag artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: image-tag
-            path: .
-        
-        - name: Read image tag
-          id: read-tag
-          run: echo "tag=$(cat image-tag.txt)" >> $GITHUB_OUTPUT
-        
-              # 🔹 Add OIDC auth again here
-        - name: Configure AWS credentials (OIDC)
-          uses: aws-actions/configure-aws-credentials@v4
-          with:
-            role-to-assume: arn:aws:iam::132514887880:role/github-oidc-role
-            aws-region: ${{ env.AWS_REGION }}
-        
-        - name: Log in to Amazon ECR
-          id: login-ecr
-          uses: aws-actions/amazon-ecr-login@v2
-        
-        - name: Push image to ECR
-          run: |
-            IMAGE_TAG=${{ steps.read-tag.outputs.tag }}
-            docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-            echo "✅ Pushed image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
-        
-
+          
+          echo "📦 Pushing image to ECR..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+          
+          echo "✅ Successfully pushed image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
