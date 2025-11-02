@@ -6,6 +6,11 @@ on:
       - dev
       - qa
       - master
+
+permissions:
+  id-token: write        # 🔹 Required for OIDC to assume AWS role
+  contents: read         # 🔹 Needed for checkout and artifacts
+      
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: myapp-repo
