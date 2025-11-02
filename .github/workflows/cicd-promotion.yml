@@ -28,7 +28,7 @@ jobs:
         id: env_detect
         run: |
           BRANCH_NAME=${GITHUB_REF_NAME}
-          if [[ "$BRANCH_NAME" == "dev" || "$BRANCH_NAME" == "qa" || "$BRANCH_NAME" == "prod" ]]; then
+          if [[ "$BRANCH_NAME" == "dev" || "$BRANCH_NAME" == "qa" || "$BRANCH_NAME" == "master" ]]; then
             echo "env=$BRANCH_NAME" >> $GITHUB_OUTPUT
           else
             echo "Unknown branch, defaulting to dev"
