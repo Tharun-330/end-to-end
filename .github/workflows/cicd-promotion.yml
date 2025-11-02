@@ -6,6 +6,7 @@ on:
       - dev
       - qa
       - prod
+      - master
 
 env:
   AWS_REGION: ap-south-1
