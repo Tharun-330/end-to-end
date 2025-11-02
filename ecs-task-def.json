@@ -16,7 +16,7 @@
         "logConfiguration": {
           "logDriver": "awslogs",
           "options": {
-            "awslogs-group": "/ecs/myapp",
+            "awslogs-group": "/ecs/myapp-task",
             "awslogs-region": "ap-south-1",
             "awslogs-stream-prefix": "ecs"
           }
