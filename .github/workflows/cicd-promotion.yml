@@ -65,30 +65,41 @@ jobs:
         with:
           name: image-tag
           path: image-tag.txt
-
+  
   push-to-ecr:
     name: Push Image to ECR
     needs: build
     runs-on: ubuntu-latest
-
+    permissions:
+        id-token: write      # Required for OIDC
+        contents: read
+        
     steps:
-      - name: Download image tag artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: image-tag
-          path: .
+        - name: Download image tag artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: image-tag
+            path: .
+        
+        - name: Read image tag
+          id: read-tag
+          run: echo "tag=$(cat image-tag.txt)" >> $GITHUB_OUTPUT
+        
+              # 🔹 Add OIDC auth again here
+        - name: Configure AWS credentials (OIDC)
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            role-to-assume: arn:aws:iam::132514887880:role/github-oidc-role
+            aws-region: ${{ env.AWS_REGION }}
+        
+        - name: Log in to Amazon ECR
+          id: login-ecr
+          uses: aws-actions/amazon-ecr-login@v2
+        
+        - name: Push image to ECR
+          run: |
+            IMAGE_TAG=${{ steps.read-tag.outputs.tag }}
+            docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+            echo "✅ Pushed image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
+        
 
-      - name: Read image tag
-        id: read-tag
-        run: echo "tag=$(cat image-tag.txt)" >> $GITHUB_OUTPUT
-
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Push image to ECR
-        run: |
-          IMAGE_TAG=${{ steps.read-tag.outputs.tag }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
-          echo "✅ Pushed image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG"
-          
