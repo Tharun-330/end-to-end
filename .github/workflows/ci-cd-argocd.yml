@@ -1,0 +1,85 @@
+name: CI-CD Pipeline (ArgoCD + DockerHub)
+
+on:
+  push:
+    branches:
+      - dev
+      - qa
+      - master
+
+permissions:
+  contents: write  # needed to push manifest updates
+  id-token: write
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_REPO: myapp
+  IMAGE_NAME: myapp
+  REGISTRY: docker.io
+  K8S_BASE_PATH: k8s
+
+jobs:
+  build-push-update:
+    runs-on: ubuntu-latest
+    name: Build, Push to DockerHub, and Trigger ArgoCD Sync
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect Environment
+        id: env_detect
+        run: |
+          BRANCH=${GITHUB_REF_NAME}
+          case "$BRANCH" in
+            dev) NAMESPACE="dev" ;;
+            qa) NAMESPACE="qa" ;;
+            master) NAMESPACE="prod" ;;
+            *) NAMESPACE="dev" ;;
+          esac
+          echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+          echo "env=$BRANCH" >> $GITHUB_OUTPUT
+          echo "🌍 Environment detected: $BRANCH -> $NAMESPACE"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        id: docker_build
+        run: |
+          IMAGE_TAG=${{ github.run_number }}-${{ steps.env_detect.outputs.env }}
+          IMAGE_URI=${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}
+
+          echo "🚀 Building image: $IMAGE_URI"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          echo "✅ Image pushed successfully: $IMAGE_URI"
+
+      - name: Update Kubernetes manifest with new image
+        run: |
+          NAMESPACE=${{ steps.env_detect.outputs.namespace }}
+          DEPLOYMENT_FILE="${{ env.K8S_BASE_PATH }}/${NAMESPACE}/deployment.yaml"
+
+          echo "📝 Updating image tag in $DEPLOYMENT_FILE"
+          sed -i "s|image: .*|image: $IMAGE_URI|" $DEPLOYMENT_FILE
+
+          echo "✅ Updated manifest:"
+          grep "image:" $DEPLOYMENT_FILE
+
+      - name: Commit and Push Changes to Repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "🚀 Update image to $IMAGE_URI for ${{ steps.env_detect.outputs.namespace }}"
+          git push origin ${{ steps.env_detect.outputs.env }}
+
+      - name: Argo CD Sync Info
+        run: |
+          echo "✅ Changes pushed to branch: ${{ steps.env_detect.outputs.env }}"
+          echo "🌐 Argo CD will detect and sync the deployment automatically."
