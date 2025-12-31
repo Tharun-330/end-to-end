@@ -2,18 +2,17 @@ pipeline {
     agent none
 
     environment {
-        APP_NAME     = "dev/my-app"
-        AWS_REGION  = "ap-south-1"
-        ACCOUNT_ID  = "132514887880"
-        IMAGE_TAG   = "v${BUILD_NUMBER}"
+        APP_NAME      = "dev/my-app"
+        AWS_REGION    = "ap-south-1"
+        ACCOUNT_ID    = "132514887880"
+        IMAGE_TAG     = "v${BUILD_NUMBER}"
 
-        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
-        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
+        ECR_REPO      = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+        DOCKER_IMAGE  = "${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
 
-        /* ---------------- CHECKOUT ---------------- */
         stage('Checkout') {
             agent any
             steps {
@@ -21,7 +20,6 @@ pipeline {
             }
         }
 
-        /* ---------------- BUILD DOCKER IMAGE ---------------- */
         stage('Build Docker Image') {
             agent {
                 docker {
@@ -36,21 +34,19 @@ pipeline {
                 sh '''
                     set -e
                     mkdir -p $DOCKER_CONFIG
-                    docker version
                     docker build -t ${DOCKER_IMAGE} .
                 '''
             }
         }
 
-        /* ---------------- TRIVY SCAN ---------------- */
         stage('Scan Docker Image (Trivy)') {
             agent {
                 docker {
                     image 'aquasec/trivy:latest'
                     args '''
-                      --user root \
-                      --entrypoint="" \
-                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      --user root
+                      --entrypoint=""
+                      -v /var/run/docker.sock:/var/run/docker.sock
                       -v $WORKSPACE/.trivycache:/trivy-cache
                     '''
                 }
@@ -68,12 +64,11 @@ pipeline {
             }
         }
 
-        /* ---------------- AWS ECR LOGIN ---------------- */
         stage('Login to AWS ECR') {
             agent {
                 docker {
                     image 'jenkins/aws-docker:1.0'
-                    args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
             environment {
@@ -87,10 +82,6 @@ pipeline {
                     sh '''
                         set -e
                         mkdir -p $DOCKER_CONFIG
-                        aws --version
-                        docker --version
-                        aws sts get-caller-identity
-
                         aws ecr get-login-password --region ${AWS_REGION} | \
                         docker login --username AWS --password-stdin \
                         ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
@@ -99,7 +90,6 @@ pipeline {
             }
         }
 
-        /* ---------------- PUSH IMAGE TO ECR ---------------- */
         stage('Push Docker Image to ECR') {
             agent {
                 docker {
@@ -118,7 +108,6 @@ pipeline {
             }
         }
 
-        /* ---------------- DEPLOY TO KUBERNETES ---------------- */
         stage('Deploy to Kubernetes (Minikube)') {
             agent {
                 docker {
@@ -138,14 +127,15 @@ pipeline {
         }
     }
 
-    /* ---------------- POST CLEANUP ---------------- */
     post {
         always {
-            echo "🧹 Cleaning up workspace credentials and caches"
-            sh '''
-                rm -rf $WORKSPACE/.docker || true
-                rm -rf $WORKSPACE/.trivycache || true
-            '''
+            node {
+                echo "🧹 Cleaning workspace"
+                sh '''
+                    rm -rf $WORKSPACE/.docker || true
+                    rm -rf $WORKSPACE/.trivycache || true
+                '''
+            }
         }
         success {
             echo "✅ Pipeline completed successfully"
