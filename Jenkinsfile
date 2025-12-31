@@ -111,6 +111,7 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes (Minikube)') {
+            agent any
             steps {
                 sh '''
                     set -e
