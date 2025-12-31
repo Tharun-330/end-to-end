@@ -100,7 +100,7 @@ pipeline {
         stage('Login to AWS ECR') {
 			agent {
 				docker {
-					image 'amazon/aws-cli:latest'
+					image 'docker:latest'
 					args '''--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'''
 				}
 			}
@@ -109,9 +109,10 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
                     sh '''
                         set -e
+                        echo "Authenticating to AWS ECR..."
+						apk add --no-cache aws-cli
 						aws --version
 						aws sts get-caller-identity
-                        echo "Authenticating to AWS ECR..."
                         aws ecr get-login-password --region ${AWS_REGION} | \
                         docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                         echo "✅ Successfully logged in to ECR!"
