@@ -2,13 +2,13 @@ pipeline {
     agent none
 
     environment {
-        APP_NAME      = "dev/my-app"
-        AWS_REGION    = "ap-south-1"
-        ACCOUNT_ID    = "132514887880"
-        IMAGE_TAG     = "v${BUILD_NUMBER}"
+        APP_NAME     = "my-app"
+        AWS_REGION  = "ap-south-1"
+        ACCOUNT_ID  = "132514887880"
+        IMAGE_TAG   = "v${BUILD_NUMBER}"
 
-        ECR_REPO      = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
-        DOCKER_IMAGE  = "${ECR_REPO}:${IMAGE_TAG}"
+        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
@@ -113,7 +113,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    mkdir -p $DOCKER_CONFIG
                     docker push ${DOCKER_IMAGE}
                 '''
             }
@@ -138,18 +137,20 @@ pipeline {
         }
     }
 
+    /* ---------------- POST CLEANUP ---------------- */
     post {
+        always {
+            echo "🧹 Cleaning up workspace credentials and caches"
+            sh '''
+                rm -rf $WORKSPACE/.docker || true
+                rm -rf $WORKSPACE/.trivycache || true
+            '''
+        }
         success {
             echo "✅ Pipeline completed successfully"
         }
         failure {
             echo "❌ Pipeline failed"
-        }
-        always {
-            echo "🧾 Pipeline finished"
-        }
-        always {
-            sh 'rm -rf $WORKSPACE/.docker || true'
         }
     }
 }
