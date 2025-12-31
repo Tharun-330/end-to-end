@@ -123,12 +123,13 @@ pipeline {
             agent {
                 docker {
                     image 'registry.k8s.io/kubectl:v1.30.0'
-                    args '-v ~/.kube:/root/.kube'
+                    args "-v ${WORKSPACE}/.kube:/root/.kube"
                 }
             }
             steps {
                 sh '''
                     set -e
+                    kubectl version --client
                     kubectl config use-context minikube
                     kubectl apply -n dev -f k8s/dev/
                     kubectl rollout status deployment/myapp -n dev
