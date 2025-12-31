@@ -137,12 +137,6 @@ pipeline {
             }
         }
     }
-    
-    post {
-        always {
-            sh 'rm -rf $WORKSPACE/.docker || true'
-        }
-    }
 
     post {
         success {
@@ -153,6 +147,9 @@ pipeline {
         }
         always {
             echo "🧾 Pipeline finished"
+        }
+        always {
+            sh 'rm -rf $WORKSPACE/.docker || true'
         }
     }
 }
