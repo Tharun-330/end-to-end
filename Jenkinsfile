@@ -2,12 +2,13 @@ pipeline {
     agent none
 
     environment {
-        APP_NAME   = "my-app"
-        AWS_REGION = "ap-south-1"
-        ACCOUNT_ID = "132514887880"
-        IMAGE_TAG  = "v${BUILD_NUMBER}"
-        ECR_REPO   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
-        DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
+        APP_NAME      = "my-app"
+        AWS_REGION    = "ap-south-1"
+        ACCOUNT_ID    = "132514887880"
+        IMAGE_TAG     = "v${BUILD_NUMBER}"
+
+        ECR_REPO      = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+        DOCKER_IMAGE  = "${ECR_REPO}:${IMAGE_TAG}"
     }
 
     stages {
@@ -28,9 +29,13 @@ pipeline {
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
+            environment {
+                DOCKER_CONFIG = "${WORKSPACE}/.docker"
+            }
             steps {
                 sh '''
                     set -e
+                    mkdir -p $DOCKER_CONFIG
                     docker version
                     docker build -t ${DOCKER_IMAGE} .
                 '''
@@ -66,6 +71,9 @@ pipeline {
                     args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
+            environment {
+                DOCKER_CONFIG = "${WORKSPACE}/.docker"
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -73,6 +81,7 @@ pipeline {
                 ]]) {
                     sh '''
                         set -e
+                        mkdir -p $DOCKER_CONFIG
                         aws --version
                         docker --version
                         aws sts get-caller-identity
@@ -93,9 +102,13 @@ pipeline {
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
+            environment {
+                DOCKER_CONFIG = "${WORKSPACE}/.docker"
+            }
             steps {
                 sh '''
                     set -e
+                    mkdir -p $DOCKER_CONFIG
                     docker push ${DOCKER_IMAGE}
                 '''
             }
