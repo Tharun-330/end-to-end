@@ -129,15 +129,20 @@ pipeline {
         }
     }
 
-    post {
-        always {
-            echo "🧾 Pipeline completed."
-        }
-        failure {
-            echo "❌ Pipeline failed! Check logs above."
-        }
-        success {
-            echo "✅ Pipeline executed successfully!"
-        }
+post {
+    always {
+        sh '''
+            rm -rf "$WORKSPACE/.docker" || true
+            rm -rf "$WORKSPACE/.trivycache" || true
+        '''
+        echo "🧹 Workspace cleanup completed"
     }
+    success {
+        echo "✅ Pipeline completed successfully"
+    }
+    failure {
+        echo "❌ Pipeline failed! Check logs above."
+    }
+}
+
 }
