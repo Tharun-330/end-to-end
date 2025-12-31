@@ -100,7 +100,7 @@ pipeline {
         stage('Login to AWS ECR') {
 			agent {
 				docker {
-					image 'amazon/aws-cli'
+					image 'amazon/aws-cli:latest'
 					args '''--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'''
 				}
 			}
@@ -110,6 +110,7 @@ pipeline {
                     sh '''
                         set -e
 						aws --version
+						aws sts get-caller-identity
                         echo "Authenticating to AWS ECR..."
                         aws ecr get-login-password --region ${AWS_REGION} | \
                         docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
