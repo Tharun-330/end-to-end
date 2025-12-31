@@ -2,11 +2,10 @@ pipeline {
     agent none
 
     environment {
-        APP_NAME   = "dev/my-app"
+        APP_NAME   = "my-app"
         AWS_REGION = "ap-south-1"
         ACCOUNT_ID = "132514887880"
         IMAGE_TAG  = "v${BUILD_NUMBER}"
-
         ECR_REPO     = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/dev/${APP_NAME}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
     }
