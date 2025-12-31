@@ -121,7 +121,6 @@ pipeline {
                 sh '''
                     set -e
                     kubectl version --client
-                    kubectl config get-contexts
                     kubectl config use-context minikube
                     kubectl get ns dev || kubectl create ns dev
                     kubectl apply -n dev -f k8s/dev/
