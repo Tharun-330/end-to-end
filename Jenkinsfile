@@ -129,12 +129,14 @@ pipeline {
 
     post {
         always {
-            node {
-                echo "🧹 Cleaning workspace"
-                sh '''
-                    rm -rf $WORKSPACE/.docker || true
-                    rm -rf $WORKSPACE/.trivycache || true
-                '''
+            script {
+                node('any') {
+                    echo "🧹 Cleaning workspace"
+                    sh '''
+                        rm -rf $WORKSPACE/.docker || true
+                        rm -rf $WORKSPACE/.trivycache || true
+                    '''
+                }
             }
         }
         success {
