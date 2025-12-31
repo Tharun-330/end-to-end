@@ -108,7 +108,7 @@ pipeline {
                 echo "🔑 Logging in to AWS ECR..."
 				withCredentials([[
 					$class: 'AmazonWebServicesCredentialsBinding',
-					credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797'
+					credentialsId: 'aws-ecr-creds'
 				]]) {
 					sh '''
                         set -ex
