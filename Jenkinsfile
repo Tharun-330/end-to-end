@@ -130,7 +130,7 @@ pipeline {
     post {
         always {
             script {
-                node('any') {
+                node {
                     echo "🧹 Cleaning workspace"
                     sh '''
                         rm -rf $WORKSPACE/.docker || true
