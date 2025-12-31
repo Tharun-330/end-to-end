@@ -6,7 +6,7 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
         PYTHON = "/usr/bin/python3"
-	AWS_REGION = "ap-south-1"                  // ✅ change as needed
+		AWS_REGION = "ap-south-1"                  // ✅ change as needed
         ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
     }
@@ -78,7 +78,12 @@ pipeline {
 			agent {
 				docker {
 					image 'aquasec/trivy:latest'
-					args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+					args '''
+					  --entrypoint="" \
+					  -v /var/run/docker.sock:/var/run/docker.sock \
+					  -v $WORKSPACE/.trivycache:/tmp/trivy \
+					  -e TRIVY_CACHE_DIR=/tmp/trivy
+					'''
 				}
 			}
 		
@@ -86,6 +91,7 @@ pipeline {
                 echo "🔍 Scanning Docker image with Trivy..."
                 sh '''
                     set -e
+					mkdir -p $WORKSPACE/.trivycache
                     trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
                 '''
             }
