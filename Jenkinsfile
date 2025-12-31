@@ -98,6 +98,14 @@ pipeline {
         }
 
         stage('Login to AWS ECR') {
+			agent {
+				docker {
+					image 'amazon/aws-cli:2'
+					args '''
+						-v /var/run/docker.sock:/var/run/docker.sock
+					'''
+				}
+			}
             steps {
                 echo "🔑 Logging in to AWS ECR..."
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'b860cc13-aa91-451a-8eff-34525ed6f797']]) {
