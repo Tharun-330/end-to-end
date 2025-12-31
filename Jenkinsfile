@@ -114,7 +114,7 @@ pipeline {
             agent {
                 docker {
                     image 'bitnami/kubectl:latest'
-                    args "--entrypoint='' -v \$WORKSPACE/.kube:/root/.kube"
+                    args "--entrypoint='' -v /var/jenkins_home/.kube:/root/.kube"
                 }
             }
             steps {
