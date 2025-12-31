@@ -2,7 +2,7 @@ pipeline {
     agent none
 
     environment {
-        APP_NAME     = "my-app"
+        APP_NAME     = "dev/my-app"
         AWS_REGION  = "ap-south-1"
         ACCOUNT_ID  = "132514887880"
         IMAGE_TAG   = "v${BUILD_NUMBER}"
