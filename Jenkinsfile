@@ -60,6 +60,8 @@ pipeline {
                     set -e
                     mkdir -p /trivy-cache
                     trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
+                    rm -rf "$WORKSPACE/.docker" || true
+                    rm -rf "$WORKSPACE/.trivycache" || true
                 '''
             }
         }
@@ -129,21 +131,13 @@ pipeline {
 
     post {
         always {
-            script {
-                node {
-                    echo "🧹 Cleaning workspace"
-                    sh '''
-                        rm -rf "$WORKSPACE/.docker" || true
-                        rm -rf "$WORKSPACE/.trivycache" || true
-                    '''
-                }
-            }
-        }
-        success {
-            echo "✅ Pipeline completed successfully"
+            echo "🧾 Pipeline completed."
         }
         failure {
-            echo "❌ Pipeline failed"
+            echo "❌ Pipeline failed! Check logs above."
+        }
+        success {
+            echo "✅ Pipeline executed successfully!"
         }
     }
 }
