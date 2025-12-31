@@ -48,8 +48,9 @@ pipeline {
                 docker {
                     image 'aquasec/trivy:latest'
                     args '''
-                      --entrypoint=""
-                      -v /var/run/docker.sock:/var/run/docker.sock
+                      --user root \
+                      --entrypoint="" \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
                       -v $WORKSPACE/.trivycache:/trivy-cache
                     '''
                 }
