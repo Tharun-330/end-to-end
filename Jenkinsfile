@@ -133,8 +133,8 @@ pipeline {
                 node {
                     echo "🧹 Cleaning workspace"
                     sh '''
-                        rm -rf ${env.WORKSPACE}/.docker || true
-                        rm -rf ${env.WORKSPACE}/.trivycache || true
+                        rm -rf "$WORKSPACE/.docker" || true
+                        rm -rf "$WORKSPACE/.trivycache" || true
                     '''
                 }
             }
