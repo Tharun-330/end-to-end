@@ -113,7 +113,7 @@ pipeline {
         stage('Deploy to Kubernetes (Minikube)') {
             agent {
                 docker {
-                    image 'registry.k8s.io/kubectl:v1.30.0'
+                    image 'bitnami/kubectl:1.30.0'
                     args "--entrypoint='' -v \$WORKSPACE/.kube:/root/.kube"
                 }
             }
