@@ -1,142 +1,134 @@
 pipeline {
-    agent any
+    agent none
 
     environment {
-        APP_NAME = "my-app"
-        IMAGE_TAG = "v${BUILD_NUMBER}"
+        APP_NAME   = "my-app"
+        AWS_REGION = "ap-south-1"
+        ACCOUNT_ID = "132514887880"
+        IMAGE_TAG  = "v${BUILD_NUMBER}"
+        ECR_REPO   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
         DOCKER_IMAGE = "${ECR_REPO}:${IMAGE_TAG}"
-        PYTHON = "/usr/bin/python3"
-		AWS_REGION = "ap-south-1"                  // ✅ change as needed
-        ACCOUNT_ID = "132514887880"               // ✅ your AWS Account ID
-        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
     }
 
     stages {
 
+        /* ---------------- CHECKOUT ---------------- */
         stage('Checkout') {
+            agent any
             steps {
-                echo "Checking out source code..."
                 checkout scm
             }
         }
 
-        stage('Setup Python Environment') {
-            steps {
-                echo "Setting up Python virtual environment..."
-                sh '''
-                    set -e
-                    if ! command -v python3 >/dev/null 2>&1; then
-                        echo "Installing Python3..."
-                        sudo apt-get update -y
-                        sudo apt-get install -y python3 python3-pip python3-venv
-                    fi
-
-                    # Clean and recreate venv
-                    rm -rf venv
-                    ${PYTHON} -m venv venv
-                    . venv/bin/activate
-
-                    pip install --upgrade pip
-                    pip install -r app/requirements.txt
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                echo "Running unit tests..."
-                sh '''
-                    set -e
-                    . venv/bin/activate
-                    chmod +x venv/bin/pytest  # ✅ Fix: ensure pytest is executable
-                    pytest app/tests/ -v --junitxml=results.xml
-                '''
-            }
-            post {
-                always {
-                    echo "Archiving test results..."
-                    junit allowEmptyResults: true, testResults: 'results.xml'
+        /* ---------------- BUILD DOCKER IMAGE ---------------- */
+        stage('Build Docker Image') {
+            agent {
+                docker {
+                    image 'docker:27-cli'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
-        }
-
-        stage('Build Docker Image') {
             steps {
-                echo "Building Docker image..."
                 sh '''
-					set -e
+                    set -e
+                    docker version
                     docker build -t ${DOCKER_IMAGE} .
-                    echo "✅ Docker image built successfully!"
-
-                    echo "📦 Image details:"
-                    docker images ${ECR_REPO} --format "Repository: {{.Repository}} | Tag: {{.Tag}} | Size: {{.Size}}"
                 '''
             }
         }
-		
-		stage('Scan Docker Image (Trivy)') {
-			agent {
-				docker {
-					image 'aquasec/trivy:latest'
-					args '''
-					  --user root \
-					  --entrypoint="" \
-					  -v /var/run/docker.sock:/var/run/docker.sock \
-					  -v $WORKSPACE/.trivycache:/root/.cache
-					'''
-				}
-			}
-		
+
+        /* ---------------- TRIVY SCAN ---------------- */
+        stage('Scan Docker Image (Trivy)') {
+            agent {
+                docker {
+                    image 'aquasec/trivy:latest'
+                    args '''
+                      --entrypoint=""
+                      -v /var/run/docker.sock:/var/run/docker.sock
+                      -v $WORKSPACE/.trivycache:/root/.cache
+                    '''
+                }
+            }
             steps {
-                echo "🔍 Scanning Docker image with Trivy..."
                 sh '''
                     set -e
-					mkdir -p $WORKSPACE/.trivycache
+                    mkdir -p $WORKSPACE/.trivycache
                     trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
                 '''
             }
         }
-		
+
+        /* ---------------- AWS ECR LOGIN ---------------- */
         stage('Login to AWS ECR') {
-			agent {
-				docker {
-					image 'amazon/aws-cli:latest'
-					args '''--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'''
-				}
-			}
+            agent {
+                docker {
+                    image 'jenkins/aws-docker:1.0'
+                    args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
-                echo "🔑 Logging in to AWS ECR..."
-				withCredentials([[
-					$class: 'AmazonWebServicesCredentialsBinding',
-					credentialsId: 'aws-ecr-creds'
-				]]) {
-					sh '''
-                        set -ex
-						
-						# install docker cli inside aws-cli container
-						yum install -y docker || apk add --no-cache docker-cli || true
-						
-						aws --version
-						aws sts get-caller-identity
-						
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    sh '''
+                        set -e
+                        aws --version
+                        docker --version
+                        aws sts get-caller-identity
+
                         aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        echo "✅ Successfully logged in to ECR!"
+                        docker login --username AWS --password-stdin \
+                        ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                     '''
                 }
             }
         }
-	}
+
+        /* ---------------- PUSH IMAGE TO ECR ---------------- */
+        stage('Push Docker Image to ECR') {
+            agent {
+                docker {
+                    image 'docker:27-cli'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                sh '''
+                    set -e
+                    docker push ${DOCKER_IMAGE}
+                '''
+            }
+        }
+
+        /* ---------------- DEPLOY TO KUBERNETES ---------------- */
+        stage('Deploy to Kubernetes (Minikube)') {
+            agent {
+                docker {
+                    image 'bitnami/kubectl:latest'
+                    args '-v ~/.kube:/root/.kube'
+                }
+            }
+            steps {
+                sh '''
+                    set -e
+                    kubectl config use-context minikube
+                    kubectl apply -n dev -f k8s/dev/
+                    kubectl rollout status deployment/myapp -n dev
+                '''
+            }
+        }
+    }
+
     post {
-        always {
-            echo "🧾 Pipeline completed."
+        success {
+            echo "✅ Pipeline completed successfully"
         }
         failure {
-            echo "❌ Pipeline failed! Check logs above."
+            echo "❌ Pipeline failed"
         }
-        success {
-            echo "✅ Pipeline executed successfully!"
+        always {
+            echo "🧾 Pipeline finished"
         }
     }
 }
-
