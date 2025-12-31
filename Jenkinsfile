@@ -74,7 +74,14 @@ pipeline {
             }
         }
 		
-        stage('Scan Docker Image (Trivy)') {
+		stage('Scan Docker Image (Trivy)') {
+			agent {
+				docker {
+					image 'aquasec/trivy:latest'
+					args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+				}
+			}
+		
             steps {
                 echo "🔍 Scanning Docker image with Trivy..."
                 sh '''
