@@ -111,12 +111,6 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes (Minikube)') {
-            agent {
-                docker {
-                    image 'bitnami/kubectl:latest'
-                    args "--entrypoint='' -v /var/jenkins_home/.kube:/root/.kube"
-                }
-            }
             steps {
                 sh '''
                     set -e
