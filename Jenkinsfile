@@ -79,10 +79,10 @@ pipeline {
 				docker {
 					image 'aquasec/trivy:latest'
 					args '''
+					  --user root \
 					  --entrypoint="" \
 					  -v /var/run/docker.sock:/var/run/docker.sock \
-					  -v $WORKSPACE/.trivycache:/tmp/trivy \
-					  -e TRIVY_CACHE_DIR=/tmp/trivy
+					  -v $WORKSPACE/.trivycache:/root/.cache
 					'''
 				}
 			}
