@@ -50,14 +50,18 @@ pipeline {
                     args '''
                       --entrypoint=""
                       -v /var/run/docker.sock:/var/run/docker.sock
-                      -v $WORKSPACE/.trivycache:/root/.cache
+                      -v $WORKSPACE/.trivycache:/trivy-cache
                     '''
                 }
+            }
+            environment {
+                TRIVY_CACHE_DIR = "/trivy-cache"
+                XDG_CACHE_HOME  = "/trivy-cache"
             }
             steps {
                 sh '''
                     set -e
-                    mkdir -p $WORKSPACE/.trivycache
+                    mkdir -p /trivy-cache
                     trivy image --severity HIGH,CRITICAL --no-progress ${DOCKER_IMAGE} || true
                 '''
             }
