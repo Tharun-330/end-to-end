@@ -110,7 +110,7 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes (Minikube)') {
+        stage('Deploy to Kubernetes (kind)') {
             agent any
             steps {
                 sh '''
