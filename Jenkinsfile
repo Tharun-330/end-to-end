@@ -32,7 +32,6 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    rm -rf "$DOCKER_CONFIG"
                     mkdir -p "$DOCKER_CONFIG"
                     docker version
                     docker build --no-cache --pull -t "$DOCKER_IMAGE" .
