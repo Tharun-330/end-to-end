@@ -22,7 +22,7 @@ pipeline {
         stage('Build Docker Image') {
             agent {
                 docker {
-                    image 'docker:cli'
+                    image 'docker:27-cli'
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
