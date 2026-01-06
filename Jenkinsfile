@@ -19,17 +19,6 @@ pipeline {
             }
         }
 
-        stage('Verify Docker') {
-            steps {
-                sh 'whoami'
-                sh 'apt-get update'
-                sh 'apt-get install -y docker.io curl ca-certificates'
-                sh 'docker --version'
-                sh 'docker ps'
-
-            }
-        }
-
         stage('Build Docker Image') {
             agent {
                 docker {
