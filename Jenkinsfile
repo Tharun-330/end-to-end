@@ -123,5 +123,28 @@ pipeline {
                 '''
             }
         }
+
+        stage('Deploy to Kubernetes (KIND)') {
+            steps {
+                sh '''
+                    set -e
+        
+                    echo "Using KIND cluster context"
+                    kubectl config use-context kind-ci-cluster
+        
+                    echo "Verifying cluster access"
+                    kubectl get nodes
+        
+                    echo "Ensuring namespace exists"
+                    kubectl get ns dev || kubectl create ns dev
+        
+                    echo "Deploying manifests"
+                    kubectl apply -n dev -f k8s/dev/
+        
+                    echo "Waiting for rollout"
+                    kubectl rollout status deployment/myapp -n dev
+                '''
+            }
+        }
     }
 }
