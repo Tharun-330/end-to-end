@@ -16,7 +16,7 @@ pipeline {
             steps {
                 sh 'whoami'
                 sh 'apt-get update'
-                sh 'apt-get install -y docker.io curl ca-certificates'
+                sh 'apt-get install -y docker.io'
                 sh 'docker --version'
                 sh 'docker ps'
 
@@ -33,7 +33,7 @@ pipeline {
             agent {
                 docker {
                     image 'docker:27-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
                     reuseNode true
                 }
             }
@@ -57,7 +57,7 @@ pipeline {
                     args '''
                       --user root
                       --entrypoint=""
-                      -v /var/run/docker.sock:/var/run/docker.sock
+                      -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""
                       -v $WORKSPACE/.trivycache:/trivy-cache
                     '''
                     reuseNode true
@@ -80,7 +80,7 @@ pipeline {
             agent {
                 docker {
                     image 'jenkins/aws-docker:1.0'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
                     reuseNode true
                 }
             }
@@ -109,7 +109,7 @@ pipeline {
             agent {
                 docker {
                     image 'docker:27-cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
                     reuseNode true
                 }
             }
