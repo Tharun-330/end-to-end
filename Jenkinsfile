@@ -13,7 +13,6 @@ pipeline {
     stages {
         
         stage('Checkout') {
-            agent any
             steps {
                 checkout scm
             }
@@ -50,6 +49,7 @@ pipeline {
                       -v /var/run/docker.sock:/var/run/docker.sock
                       -v $WORKSPACE/.trivycache:/trivy-cache
                     '''
+                    reuseNode true
                 }
             }
             environment {
@@ -70,6 +70,7 @@ pipeline {
                 docker {
                     image 'jenkins/aws-docker:1.0'
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
                 }
             }
             environment {
@@ -98,6 +99,7 @@ pipeline {
                 docker {
                     image 'docker:27-cli'
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
                 }
             }
             environment {
