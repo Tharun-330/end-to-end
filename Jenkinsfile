@@ -11,6 +11,13 @@ pipeline {
     }
 
     stages {
+        
+        stage('Checkout') {
+            agent any
+            steps {
+                checkout scm
+            }
+        }
 
         stage('Verify Docker') {
             steps {
@@ -20,13 +27,6 @@ pipeline {
                 sh 'docker --version'
                 sh 'docker ps'
 
-            }
-        }
-
-        stage('Checkout') {
-            agent any
-            steps {
-                checkout scm
             }
         }
 
