@@ -138,13 +138,13 @@ pipeline {
                     kubectl get nodes
         
                     echo "Ensuring namespace exists"
-                    kubectl get ns dev || kubectl create ns dev
+                    kubectl get ns qa || kubectl create ns qa
         
                     echo "Deploying manifests"
-                    kubectl apply -n dev -f k8s/dev/
+                    kubectl apply -n dev -f k8s/qa/
         
                     echo "Waiting for rollout"
-                    kubectl rollout status deployment/myapp -n dev
+                    kubectl rollout status deployment/myapp -n qa
                 '''
             }
         }
