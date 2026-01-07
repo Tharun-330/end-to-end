@@ -132,7 +132,7 @@ pipeline {
                     set -e
         
                     echo "Using KIND cluster context"
-                    kubectl config use-context
+                    kubectl config current-context
         
                     echo "Verifying cluster access"
                     kubectl get nodes
@@ -141,7 +141,7 @@ pipeline {
                     kubectl get ns qa || kubectl create ns qa
         
                     echo "Deploying manifests"
-                    kubectl apply -n dev -f k8s/qa/
+                    kubectl apply -n qa -f k8s/dev/
         
                     echo "Waiting for rollout"
                     kubectl rollout status deployment/myapp -n qa
