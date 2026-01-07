@@ -127,12 +127,22 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes (KIND)') {
+            environment {
+                KUBECONFIG = "/var/jenkins_home/.kube/config"
+            }
+
             steps {
                 sh '''
                     set -e
-        
-                    echo "Using KIND cluster context"
-                    kubectl config current-context
+
+                    echo "KUBECONFIG:"
+                    echo "$KUBECONFIG"
+
+                    echo "Available kubectl contexts:"
+                    kubectl config get-contexts
+
+                    echo "Selecting KIND context explicitly"
+                    kubectl config use-context kind-ci-cluster
         
                     echo "Verifying cluster access"
                     kubectl get nodes
