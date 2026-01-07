@@ -137,21 +137,18 @@ pipeline {
                     echo "Using kubeconfig:"
                     ls -l "$KUBECONFIG"
         
-                    echo "kubectl config view (sanity check)"
-                    kubectl config view --minify || true
-        
                     echo "Verifying cluster access"
-                    kubectl --kubeconfig "$KUBECONFIG" get nodes
+                    kubectl get nodes
         
                     echo "Ensuring namespace exists"
-                    kubectl --kubeconfig "$KUBECONFIG" get ns qa || \
-                    kubectl --kubeconfig "$KUBECONFIG" create ns qa
+                    kubectl get ns qa || \
+                    kubectl create ns qa
         
                     echo "Deploying manifests"
-                    kubectl --kubeconfig "$KUBECONFIG" apply -n qa -f k8s/qa/
+                    kubectl apply -n qa -f k8s/dev/
         
                     echo "Waiting for rollout"
-                    kubectl --kubeconfig "$KUBECONFIG" rollout status deployment/myapp -n qa
+                    kubectl rollout status deployment/myapp -n qa
                 '''
             }
         }
