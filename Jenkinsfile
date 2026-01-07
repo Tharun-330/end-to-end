@@ -132,7 +132,7 @@ pipeline {
                     set -e
         
                     echo "Using KIND cluster context"
-                    kubectl config use-context kind-ci-cluster
+                    kubectl config use-context
         
                     echo "Verifying cluster access"
                     kubectl get nodes
