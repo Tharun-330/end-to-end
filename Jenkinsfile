@@ -145,7 +145,7 @@ pipeline {
                     kubectl create ns qa
         
                     echo "Deploying manifests"
-                    kubectl apply -n qa -f k8s/dev/
+                    kubectl apply -n qa -f k8s/qa/
         
                     echo "Waiting for rollout"
                     kubectl rollout status deployment/myapp -n qa
