@@ -130,31 +130,28 @@ pipeline {
             environment {
                 KUBECONFIG = "/var/jenkins_home/.kube/config"
             }
-
             steps {
                 sh '''
                     set -e
-
-                    echo "KUBECONFIG:"
-                    echo "$KUBECONFIG"
-
-                    echo "Available kubectl contexts:"
-                    kubectl config get-contexts
-
-                    echo "Selecting KIND context explicitly"
-                    kubectl config use-context kind-ci-cluster
+        
+                    echo "Using kubeconfig:"
+                    ls -l "$KUBECONFIG"
+        
+                    echo "kubectl config view (sanity check)"
+                    kubectl config view --minify || true
         
                     echo "Verifying cluster access"
-                    kubectl get nodes
+                    kubectl --kubeconfig "$KUBECONFIG" get nodes
         
                     echo "Ensuring namespace exists"
-                    kubectl get ns qa || kubectl create ns qa
+                    kubectl --kubeconfig "$KUBECONFIG" get ns qa || \
+                    kubectl --kubeconfig "$KUBECONFIG" create ns qa
         
                     echo "Deploying manifests"
-                    kubectl apply -n qa -f k8s/dev/
+                    kubectl --kubeconfig "$KUBECONFIG" apply -n qa -f k8s/qa/
         
                     echo "Waiting for rollout"
-                    kubectl rollout status deployment/myapp -n qa
+                    kubectl --kubeconfig "$KUBECONFIG" rollout status deployment/myapp -n qa
                 '''
             }
         }
