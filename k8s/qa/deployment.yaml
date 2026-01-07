@@ -19,6 +19,6 @@ spec:
         - name: ecr-secret
       containers:
         - name: my-app
-          image: docker.io/mydockerhubrepo/myapp:8-qa
+          image: docker.io/mydockerhubrepo/myapp:8-dev
           ports:
             - containerPort: 5000
